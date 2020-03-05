@@ -31,7 +31,7 @@ public class Bot extends TelegramLongPollingBot {
         SendMessage sendMessage = new SendMessage();
         sendMessage.enableMarkdown(true);
         sendMessage.setChatId(message.getChatId().toString()); // to which chat we are sending the message
-        sendMessage.setReplyToMessageId(message.getMessageId());
+        //sendMessage.setReplyToMessageId(message.getMessageId());
         sendMessage.setText(text);
         try {
             execute(sendMessage);
@@ -40,17 +40,38 @@ public class Bot extends TelegramLongPollingBot {
         }
     }
 
-    private void add(Message message) {
+    private boolean add(Long chatId, String text) {
         try {
             FileWriter writer = new FileWriter(new File("output.txt"), true);
             PrintWriter printWriter = new PrintWriter(writer);
-
-            printWriter.println(message.getChatId() + " " + message.getText());
+            try {
+                check(text);
+            } catch (Exception e) {
+                return false;
+            }
+            printWriter.println(chatId + " " + text);
             printWriter.close();
             writer.close();
         } catch (IOException e) {
             e.printStackTrace();
+            return false;
         }
+        return true;
+    }
+
+    private  void check(String text) throws Exception {
+        String[] tokens = text.trim().split(" ");
+        if (tokens.length == 0) throw new Exception("error");
+        String date = tokens[0];
+        date = date.trim();
+        boolean dateGood = date.matches("[0-9][0-9].[0-9][0-9].[0-9][0-9][0-9][0-9]");
+        if (!dateGood) throw new Exception("error");
+        String day = date.substring(0, 2);
+        String month = date.substring(3, 5);
+        String year = date.substring(6, 10);
+        if (Integer.parseInt(day) > 31 || Integer.parseInt(month) > 12 || Integer.parseInt(year) > 2100)
+            throw new Exception("error");
+        if (tokens.length < 2 || tokens[1].length() == 0) throw new Exception("enter event");
     }
 
     private void show(Message message) {
@@ -90,21 +111,30 @@ public class Bot extends TelegramLongPollingBot {
         Message message = update.getMessage();
         if (message != null && message.hasText()) {
             String messageText = message.getText();
-            if (messageText.equals("/add")) {
+            if (messageText.equals("/start")) {
+                sendMsg(message, "I'm the Calendar Bot! I can do stuff!\n" +
+                        "Try one of my commands: \n/help\n/add\n/show\n/delete");
+                currentCommand = Command.NONE;
+            }
+            else if (messageText.equals("/add")) {
                 currentCommand = Command.ADD;
                 sendMsg(message, "Send me the date and the event like this: DD.MM.YYYY your event");
             }
             else if (messageText.equals("/help")) {
                 sendMsg(message, "I'm ready to help!");
+                currentCommand = Command.NONE;
             }
             else if (messageText.equals("/show")) {
                 show(message);
+                currentCommand = Command.NONE;
             }
+            /*
             else if (messageText.equals("/delete")) {
                 currentCommand = Command.DELETE;
                 show(message);
                 sendMsg(message, "Please send me the number of the event you want to delete");
             }
+            */
             else if (messageText.equals("/stop")) {
                 currentCommand = Command.NONE;
                 sendMsg(message, "Ready for the new command!");
@@ -116,17 +146,16 @@ public class Bot extends TelegramLongPollingBot {
                 } else {
                     switch (currentCommand) {
                         case ADD:
-                            // process the string in format "DD.MM.YYYY event"
-                            add(update.getMessage());
-                            sendMsg(message, "Added successfully!");
-                            currentCommand = Command.NONE;
-                            // or tell the format is invalid
+                            if (add(message.getChatId(), messageText)) {
+                                sendMsg(message, "Added successfully!");
+                                currentCommand = Command.NONE;
+                            }
+                            else {
+                                sendMsg(message, "Invalid date format.\nFormat should be: DD.MM.YYYY\nTry again");
+                            }
                             break;
                         case DELETE:
-                            // delete the event
-                            sendMsg(message, "Deleted successfully!");
-                            currentCommand = Command.NONE;
-                            // or tell the format is invalid
+                            // TODO: delete the event
                             break;
                         default:
                             break;
