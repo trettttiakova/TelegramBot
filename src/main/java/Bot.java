@@ -51,21 +51,22 @@ public class Bot extends TelegramLongPollingBot {
         return format.parse(date);
     }
     
-    private void add(Long chatId, String text) throws BotException {
+    private void add(Message message) throws BotException {
+        if (message.getText().length() > 256) {
+            throw new BotException("Your message cannot be longer than 256 characters\nTry again");
+        }
+        String[] tokens = message.getText().trim().split(" ");
+        if (tokens.length < 2) {
+            throw new BotException("Invalid event format.\nFormat should be: DD.MM.YYYY your event\nTry again");
+        }
         try {
-            FileWriter writer = new FileWriter(new File("output.txt"), true);
-            PrintWriter printWriter = new PrintWriter(writer);
-            String[] tokens = text.trim().split(" ");
-            if (tokens.length < 2) {
-                throw new BotException("Invalid event format.\nFormat should be: DD.MM.YYYY your event\nTry again");
-            }
-            try {
-                correctDateFormat(tokens[0].replace('.', '/'));
-            } catch (ParseException e) {
-                throw new BotException("Invalid date format.\nFormat should be: DD.MM.YYYY\nTry again");
-            }
-            printWriter.println(chatId + " " + text);
-            printWriter.close();
+            correctDateFormat(tokens[0]);
+        } catch (ParseException e) {
+            throw new BotException("Invalid date format.\nFormat should be: DD.MM.YYYY\nTry again");
+        }
+        try {
+            PrintWriter writer = new PrintWriter(new FileWriter(new File("output.txt"), true));
+            writer.println(message.getChatId() + " " + message.getText());
             writer.close();
         } catch (IOException e) {
             e.printStackTrace();
@@ -124,7 +125,7 @@ public class Bot extends TelegramLongPollingBot {
             while (s != null) {
                 if (s.length() >= 2) {
                     String[] strings = s.split(" ");
-                    System.out.println(strings[0] + " " + strings[1]);
+//                     System.out.println(strings[0] + " " + strings[1]);
                     if (Long.parseLong(strings[0]) == message.getChatId()) {
                         stringBuilder.append(s.substring(strings[0].length())).append("\n");
                     }
@@ -177,8 +178,7 @@ public class Bot extends TelegramLongPollingBot {
         Message message = update.getMessage();
         try {
             if (message != null && message.hasText()) {
-                String messageText = message.getText();
-                switch (messageText) {
+                switch (message.getText()) {
                     case "/start":
                         sendMsg(message, "I'm the Calendar Bot! I can do stuff!\n" +
                                 "Try one of my commands: \n/help\n/add\n/show\n/delete");
@@ -186,7 +186,8 @@ public class Bot extends TelegramLongPollingBot {
                         break;
                     case "/add":
                         currentCommand = Command.ADD;
-                        sendMsg(message, "Send me the date and the event like this: DD.MM.YYYY your event");
+                        sendMsg(message, "Send me the date and the event like this: DD.MM.YYYY your event\n" +
+                                "Your message cannot be longer than 256 characters");
                         break;
                     case "/help":
                         sendMsg(message, "I'm ready to help!");
@@ -213,7 +214,7 @@ public class Bot extends TelegramLongPollingBot {
                         } else {
                             switch (currentCommand) {
                                 case ADD:
-                                    add(message.getChatId(), messageText);
+                                    add(message);
                                     sendMsg(message, "Added successfully!");
                                     currentCommand = Command.NONE;
                                     break;
