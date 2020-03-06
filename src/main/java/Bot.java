@@ -64,10 +64,8 @@ public class Bot extends TelegramLongPollingBot {
         } catch (ParseException e) {
             throw new BotException("Invalid date format.\nFormat should be: DD.MM.YYYY\nTry again");
         }
-        try {
-            PrintWriter writer = new PrintWriter(new FileWriter(new File("output.txt"), true));
+        try (PrintWriter writer = new PrintWriter(new FileWriter(new File("output.txt"), true))) {
             writer.println(message.getChatId() + " " + message.getText());
-            writer.close();
         } catch (IOException e) {
             e.printStackTrace();
             throw new BotException("Unable to enter event now.\nPlease try again later");
