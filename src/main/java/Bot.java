@@ -39,13 +39,23 @@ public class Bot extends TelegramLongPollingBot {
             e.printStackTrace();
         }
     }
+    
+    //сейчас возвращаемое значение не используется, если что, сделаю void
+    private Date correctDateFormat(String date) throws ParseException {
+        return (new SimpleDateFormat("dd/MM/yyyy").parse(date));
+    }
 
     private boolean add(Long chatId, String text) {
         try {
             FileWriter writer = new FileWriter(new File("output.txt"), true);
             PrintWriter printWriter = new PrintWriter(writer);
+            String[] tokens = text.trim().split(" ");
+            if (tokens.length < 2) {
+                return false;
+            }
             try {
-                check(text);
+//                 check(text);
+                correctDateFormat(tokens[0].replace('.', '/'));
             } catch (Exception e) {
                 return false;
             }
@@ -59,6 +69,7 @@ public class Bot extends TelegramLongPollingBot {
         return true;
     }
 
+    /*
     private  void check(String text) throws Exception {
         String[] tokens = text.trim().split(" ");
         if (tokens.length == 0) throw new Exception("error");
@@ -73,6 +84,7 @@ public class Bot extends TelegramLongPollingBot {
             throw new Exception("error");
         if (tokens.length < 2 || tokens[1].length() == 0) throw new Exception("enter event");
     }
+    */
 
     private void show(Message message) {
         //  it will show all the events
