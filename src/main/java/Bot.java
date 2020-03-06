@@ -16,10 +16,14 @@ public class Bot extends TelegramLongPollingBot {
     private enum Command {
         ADD,
         DELETE,
+        RANDOM_DATE,
         NONE
     }
 
     private Command currentCommand = Command.NONE;
+    
+    //пусть пока так будет, но так не будет
+    private SimpleDateFormat formatter = new SimpleDateFormat("dd.MM.yyyy");
 
     public static void main(String[] args) {
         ApiContextInitializer.init();
@@ -172,6 +176,34 @@ public class Bot extends TelegramLongPollingBot {
     }
     */
     
+    //жизненно необходимо
+    private void sendImg(Message message, String name, String path) throws BotException {
+        SendPhoto sendPhoto = new SendPhoto();
+        sendPhoto.setChatId(message.getChatId().toString());
+        sendPhoto.setReplyToMessageId(message.getMessageId());
+        try {
+            sendPhoto.setPhoto(name, new FileInputStream(new File(path)));
+            execute(sendPhoto);
+        } catch (FileNotFoundException | TelegramApiException e) {
+            e.printStackTrace();
+            throw new BotException("Unable to show photo now.\nPlease try again later");
+        }
+    }
+    
+    private String randomDate(Message message) throws BotException {
+        String[] dates = message.getText().split(" ");
+        try {
+            Date firstDate = correctDateFormat(dates[0]);
+            Date secondDate = correctDateFormat(dates[1]);
+            if (firstDate.compareTo(secondDate) >= 0) {
+                throw new BotException("The first date should be earlier than the second date\nTry again");
+            }
+            return formatter.format(new Date(ThreadLocalRandom.current().nextLong(firstDate.getTime(), secondDate.getTime())));
+        } catch (ParseException e) {
+            throw new BotException("Invalid date format.\nFormat should be: DD.MM.YYYY\nTry again");
+        }
+    }
+    
     public void onUpdateReceived(Update update) {
         Message message = update.getMessage();
         try {
@@ -201,6 +233,11 @@ public class Bot extends TelegramLongPollingBot {
                 show(message);
                 sendMsg(message, "Please send me the number of the event you want to delete");
             */
+                    case "/randomDate":
+                        currentCommand = Command.RANDOM_DATE;
+                        sendMsg(message, "Send me dates like this: DD.MM.YYYY DD.MM.YYYY\n" +
+                                "The first date should be earlier than the second date");
+                        break;
                     case "/stop":
                         currentCommand = Command.NONE;
                         sendMsg(message, "Ready for the new command!");
@@ -208,7 +245,7 @@ public class Bot extends TelegramLongPollingBot {
                     default:
                         if (currentCommand.equals(Command.NONE)) {
                             sendMsg(message, "I don't know what you mean :(\n" +
-                                    "Try one of these: \n/help\n/add\n/show\n/delete");
+                                    "Try one of these: \n/help\n/add\n/show\n/delete\n/randomDate");
                         } else {
                             switch (currentCommand) {
                                 case ADD:
@@ -218,6 +255,9 @@ public class Bot extends TelegramLongPollingBot {
                                     break;
                                 case DELETE:
                                     // TODO: delete the event
+                                    break;
+                                case RANDOM_DATE:
+                                    sendMsg(message, randomDate(message));
                                     break;
                                 default:
                                     break;
