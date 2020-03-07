@@ -258,6 +258,7 @@ public class Bot extends TelegramLongPollingBot {
                                     break;
                                 case RANDOM_DATE:
                                     sendMsg(message, randomDate(message));
+                                    currentCommand = Command.NONE;
                                     break;
                                 default:
                                     break;
