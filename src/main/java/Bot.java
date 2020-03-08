@@ -13,7 +13,15 @@ public class Bot extends TelegramLongPollingBot {
     private final String userName = "root";
     private static final String passWord = "root";
     private final String connectionURL = "jdbc:mysql://localhost:3306/MyDB?useUnicode=true&characterSetResults=UTF-8&characterEncoding=UTF-8&useTimezone=true&serverTimezone=Europe/Moscow";
-    private final String botName = "@TheFriendliestDoveBot";
+    private final String botName = "@YourCalendarBot";
+
+    private enum Command {
+        ADD,
+        DELETE,
+        NONE
+    }
+
+    private Command currentCommand = Command.NONE;
 
     static class Event {
         Date date;
@@ -32,13 +40,6 @@ public class Bot extends TelegramLongPollingBot {
         }
     }
 
-    private enum Command {
-        ADD,
-        DELETE,
-        NONE
-    }
-
-    private Command currentCommand = Command.NONE;
 
     public static void main(String[] args) {
         ApiContextInitializer.init();
@@ -62,128 +63,12 @@ public class Bot extends TelegramLongPollingBot {
         }
     }
 
-    private boolean add(Long chatId, String text) {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            Event event = check(text);
-            try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
-                 PreparedStatement statement = connection.prepareStatement("INSERT INTO `Events` (`chatId`, `text`, `date`) VALUES (?,?,?)")) {
-                statement.setLong(1, chatId);
-                statement.setString(2, event.text);
-                statement.setDate(3, event.date);
-                if (statement.executeUpdate() != 1) {
-                    return false;
-                }
-
-            } catch (SQLException e) {
-                return false;
-
-            }
-
-        } catch (Exception e) {
-            return false;
-        }
-        return true;
-    }
-
-    private Event check(String text) throws Exception {
-        String[] tokens = text.trim().split(" ");
-        if (tokens.length == 0) throw new Exception("error");
-        String date = tokens[0];
-        date = date.trim();
-        boolean dateGood = date.matches("[0-9][0-9].[0-9][0-9].[0-9][0-9][0-9][0-9]");
-        if (!dateGood) throw new Exception("error");
-        String day = date.substring(0, 2);
-        String month = date.substring(3, 5);
-        String year = date.substring(6, 10);
-        if (Integer.parseInt(day) > 31 || Integer.parseInt(month) > 12 || Integer.parseInt(year) > 2100)
-            throw new Exception("error");
-        if (tokens.length < 2 || tokens[1].length() == 0) throw new Exception("event of length 0");
-        return new Event(Date.valueOf(year + "-" + month + "-" + day), text.substring(11), -1);
-    }
-
-
-    private String getQuery(boolean deleteFlag) {
-        if (deleteFlag) return "SELECT * FROM Events WHERE chatId=? ORDER BY id";
-        return "SELECT * FROM Events WHERE chatId=? ORDER BY date";
-    }
-
-    private void show(Message message, boolean deleteFlag) {
-        //  it will show all the events
-        try {
-            StringBuilder stringBuilder = new StringBuilder();
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
-                 PreparedStatement statement = connection.prepareStatement(getQuery(deleteFlag))) {
-                statement.setLong(1, message.getChatId());
-
-                try (ResultSet resultSet = statement.executeQuery()) {
-                    Event event;
-                    while ((event = toEvent(statement.getMetaData(), resultSet)) != null) {
-                        if (deleteFlag) {
-                            stringBuilder.append("Event number ").append(event.id).append(": ");
-                        }
-                        stringBuilder.append(event.toString()).append("\n");
-                    }
-                } catch (Exception e) {
-                    sendMsg(message, "Something wrong. Try again");
-                }
-
-                if (stringBuilder.toString().equals("")) {
-                    sendMsg(message, "No events, you're all free!");
-                    if (deleteFlag) throw new NullPointerException();
-                } else {
-                    sendMsg(message, stringBuilder.toString());
-                }
-
-
-            } catch (SQLException e) {
-                if (!deleteFlag)
-                    sendMsg(message, "Something wrong. Try again");
-                else throw new NullPointerException();
-
-            }
-
-        } catch (Exception e) {
-            if (!deleteFlag)
-                sendMsg(message, "error");
-            else throw new NullPointerException();
-        }
-
-
-    }
-
-    private Event toEvent(ResultSetMetaData metaData, ResultSet resultSet) throws SQLException {
-        if (!resultSet.next()) {
-            return null;
-        }
-        Date date = null;
-        String event = "";
-        long id = -1;
-        for (int i = 1; i <= metaData.getColumnCount(); i++) {
-            switch (metaData.getColumnName(i)) {
-                case "text":
-                    event = resultSet.getString(i);
-                    break;
-                case "date":
-                    date = resultSet.getDate(i);
-                    break;
-                case "id":
-                    id = resultSet.getLong(i);
-                default:
-                    // No operations.
-            }
-        }
-
-        return new Event(date, event, id);
-    }
-
     public void onUpdateReceived(Update update) {
         Message message = update.getMessage();
 
         if (message != null && message.hasText()) {
             String messageText = message.getText();
-            if (messageText.endsWith("@TheFriendliestDoveBot")) {
+            if (messageText.endsWith(botName)) {
                 messageText = messageText.substring(0, messageText.length() - botName.length());
             }
             switch (messageText) {
@@ -201,7 +86,11 @@ public class Bot extends TelegramLongPollingBot {
                     currentCommand = Command.NONE;
                     break;
                 case "/show":
-                    show(message, false);
+                    try {
+                        show(message, false);
+                    } catch (BotException e) {
+                        //ignoring
+                    }
                     currentCommand = Command.NONE;
                     break;
                 case "/delete":
@@ -249,6 +138,98 @@ public class Bot extends TelegramLongPollingBot {
         }
     }
 
+    private Event check(String text) throws Exception {
+        String[] tokens = text.trim().split(" ");
+        if (tokens.length == 0) throw new BotException("error");
+        String date = tokens[0];
+        date = date.trim();
+        boolean dateGood = date.matches("[0-9][0-9].[0-9][0-9].[0-9][0-9][0-9][0-9]");
+        if (!dateGood) throw new BotException("error");
+        String day = date.substring(0, 2);
+        String month = date.substring(3, 5);
+        String year = date.substring(6, 10);
+        if (Integer.parseInt(day) > 31 || Integer.parseInt(month) > 12 || Integer.parseInt(year) > 2100)
+            throw new BotException("error");
+        if (tokens.length < 2 || tokens[1].length() == 0) throw new BotException("event of length 0");
+        return new Event(Date.valueOf(year + "-" + month + "-" + day), text.substring(11), -1);
+    }
+
+    private String getQuery(boolean deleteFlag) {
+        if (deleteFlag) return "SELECT * FROM Events WHERE chatId=? ORDER BY id";
+        return "SELECT * FROM Events WHERE chatId=? ORDER BY date";
+    }
+
+    private boolean add(Long chatId, String text) {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            Event event = check(text);
+            try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
+                 PreparedStatement statement = connection.prepareStatement("INSERT INTO `Events` (`chatId`, `text`, `date`) VALUES (?,?,?)")) {
+                statement.setLong(1, chatId);
+                statement.setString(2, event.text);
+                statement.setDate(3, event.date);
+                if (statement.executeUpdate() != 1) {
+                    return false;
+                }
+
+            } catch (SQLException e) {
+                return false;
+
+            }
+
+        } catch (Exception e) {
+            return false;
+        }
+        return true;
+    }
+
+
+    private void show(Message message, boolean deleteFlag) throws BotException {
+        //  it will show all the events
+        try {
+            StringBuilder stringBuilder = new StringBuilder();
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
+                 PreparedStatement statement = connection.prepareStatement(getQuery(deleteFlag))) {
+                statement.setLong(1, message.getChatId());
+
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    Event event;
+                    while ((event = toEvent(statement.getMetaData(), resultSet)) != null) {
+                        if (deleteFlag) {
+                            stringBuilder.append("Event number ").append(event.id).append(": ");
+                        }
+                        stringBuilder.append(event.toString()).append("\n");
+                    }
+                } catch (Exception e) {
+                    sendMsg(message, "Something wrong. Try again");
+                }
+
+                if (stringBuilder.toString().equals("")) {
+                    sendMsg(message, "No events, you're all free!");
+                    if (deleteFlag) throw new BotException("nothing to delete");
+                } else {
+                    sendMsg(message, stringBuilder.toString());
+                }
+
+
+            } catch (SQLException e) {
+                if (!deleteFlag)
+                    sendMsg(message, "Something wrong. Try again");
+                else throw new BotException("error");
+
+            }
+
+        } catch (Exception e) {
+            if (!deleteFlag)
+                sendMsg(message, "Something wrong. Try again");
+            else throw new BotException("error");
+        }
+
+
+    }
+
+
     private boolean delete(String s) {
 
         try {
@@ -272,12 +253,37 @@ public class Bot extends TelegramLongPollingBot {
         return true;
     }
 
+    private Event toEvent(ResultSetMetaData metaData, ResultSet resultSet) throws SQLException {
+        if (!resultSet.next()) {
+            return null;
+        }
+        Date date = null;
+        String event = "";
+        long id = -1;
+        for (int i = 1; i <= metaData.getColumnCount(); i++) {
+            switch (metaData.getColumnName(i)) {
+                case "text":
+                    event = resultSet.getString(i);
+                    break;
+                case "date":
+                    date = resultSet.getDate(i);
+                    break;
+                case "id":
+                    id = resultSet.getLong(i);
+                default:
+                    // No operations.
+            }
+        }
+
+        return new Event(date, event, id);
+    }
+
     public String getBotUsername() {
-        return "TheFriendliestDoveBot";
+        return botName.substring(1);
     }
 
     public String getBotToken() {
-        return "1089800373:AAGTZYoC1GgpFVfeDUDkkAJ_yE6PtvT7Wvk";
+        return "1043383878:AAFMtEM1RTsLAoSiu-GbNcAPZJMixrjtCws";
     }
-}
 
+}
