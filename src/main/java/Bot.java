@@ -233,7 +233,8 @@ public class Bot extends TelegramLongPollingBot {
             Class.forName("com.mysql.cj.jdbc.Driver");
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
-            throw new BotException("Unable to" + (deleteFlag ? "delete" : "show") + "event now.\nPlease try again later");
+            sendMsg(message, "Unable to " + (deleteFlag ? " delete " : " show ") + " event now.\nPlease try again later");
+            throw new BotException("");
         }
 
         try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
@@ -250,21 +251,20 @@ public class Bot extends TelegramLongPollingBot {
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                throw new BotException("Unable to" + (deleteFlag ? "delete" : "show") + "event now.\nPlease try again later");
+                sendMsg(message, " Unable to " + (deleteFlag ? " delete " : " show ") + "event now.\nPlease try again later");
+                throw new BotException("");
             }
-
-            if (stringBuilder.toString().equals("")) {
-                sendMsg(message, "No events, you're all free!");
-                if (deleteFlag) throw new BotException("nothing to delete");
-            } else {
-                sendMsg(message, stringBuilder.toString());
-            }
-
-
         } catch (Exception e) {
             e.printStackTrace();
-            throw new BotException("Unable to" + (deleteFlag ? "delete" : "show") + "event now.\nPlease try again later");
+            sendMsg(message, "Unable to " + (deleteFlag ? " delete " : " show ") + "event now.\nPlease try again later");
+            throw new BotException("");
+        }
 
+        if (stringBuilder.toString().equals("")) {
+            sendMsg(message, "No events, you're all free!");
+            if (deleteFlag) throw new BotException("");
+        } else {
+            sendMsg(message, stringBuilder.toString());
         }
 
 
@@ -376,4 +376,3 @@ public class Bot extends TelegramLongPollingBot {
     }
 
 }
-
