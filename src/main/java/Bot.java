@@ -99,8 +99,7 @@ public class Bot extends TelegramLongPollingBot {
                         break;
                     case "/add":
                         currentCommand = Command.ADD;
-                        sendMsg(message, "Send me the date and the event like this: DD.MM.YYYY your event\n" +
-                                "Your message cannot be longer than 256 characters");
+                        sendMsg(message, "Send me the date and the event like this: DD.MM.YYYY your event");
                         break;
                     case "/show":
                         show(message, false);
@@ -201,9 +200,6 @@ public class Bot extends TelegramLongPollingBot {
     }
 
     private void add(Message message) throws BotException {
-        if (message.getText().length() > 256) {
-            throw new BotException("Your message cannot be longer than 256 characters\nTry again");
-        }
         String[] tokens = message.getText().trim().split(" ");
         if (tokens.length < 2) {
             throw new BotException("Invalid event format.\nFormat should be: DD.MM.YYYY your event\nTry again");
