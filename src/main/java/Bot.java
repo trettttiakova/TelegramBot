@@ -126,7 +126,6 @@ public class Bot extends TelegramLongPollingBot {
                                 sendMsg(message, "I don't know what you mean :(\n" +
                                         "Try one of these: " +
                                         "\n/start" +
-                                        "\n/help" +
                                         "\n/calendar" +
                                         "\n/add" +
                                         "\n/show" +
