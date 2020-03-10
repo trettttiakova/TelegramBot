@@ -130,44 +130,42 @@ public class Bot extends TelegramLongPollingBot {
                     sendMsg(message, "Ready for the new command!");
                     break;
                 default:
-                    if (currentCommand.equals(Command.NONE)) {
-                        sendMsg(message, "I don't know what you mean :(\n" +
-                                "Try one of these: " +
-                                "\n/start" +
-                                "\n/calendar" +
-                                "\n/add" +
-                                "\n/show" +
-                                "\n/delete" +
-                                "\n/random" +
-                                "\n/stop");
-                    } else {
-                        try {
-                            switch (currentCommand) {
-                                case ADD:
-                                    add(message.getChatId(), messageText);
-                                    sendMsg(message, "Added successfully!");
-                                    currentCommand = Command.NONE;
-                                    break;
-                                case DELETE:
-                                    delete(message.getChatId(), messageText);
-                                    sendMsg(message, "deleted successfully!");
-                                    currentCommand = Command.NONE;
-                                    break;
-                                case CALENDAR:
-                                    calendar(message);
-                                    currentCommand = Command.NONE;
-                                    break;
-                                case RANDOM:
-                                    random(message);
-                                    currentCommand = Command.NONE;
-                                    break;
-                                default:
-                                    break;
-                            }
-                        } catch (Exception e) {
-                            sendMsg(message, e.getMessage());
+                    try {
+                        switch (currentCommand) {
+                            case NONE:
+                                sendMsg(message, "I don't know what you mean :(\n" +
+                                        "Try one of these: " +
+                                        "\n/start" +
+                                        "\n/calendar" +
+                                        "\n/add" +
+                                        "\n/show" +
+                                        "\n/delete" +
+                                        "\n/random" +
+                                        "\n/stop");
+                                break;
+                            case ADD:
+                                add(message.getChatId(), messageText);
+                                sendMsg(message, "Added successfully!");
+                                currentCommand = Command.NONE;
+                                break;
+                            case DELETE:
+                                delete(message.getChatId(), messageText);
+                                sendMsg(message, "deleted successfully!");
+                                currentCommand = Command.NONE;
+                                break;
+                            case CALENDAR:
+                                calendar(message);
+                                currentCommand = Command.NONE;
+                                break;
+                            case RANDOM:
+                                random(message);
+                                currentCommand = Command.NONE;
+                                break;
+                            default:
+                                break;
                         }
-
+                    } catch (Exception e) {
+                        sendMsg(message, e.getMessage());
                     }
                     break;
             }
