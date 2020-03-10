@@ -8,16 +8,27 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 import java.sql.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.concurrent.ThreadLocalRandom;
+
+import static jdk.nashorn.internal.runtime.JSType.isNumber;
 
 public class Bot extends TelegramLongPollingBot {
     private final String userName = "root";
     private static final String passWord = "root";
-    private final String connectionURL = "jdbc:mysql://localhost:3306/MyDB?useUnicode=true&characterSetResults=UTF-8&characterEncoding=UTF-8&useTimezone=true&serverTimezone=Europe/Moscow";
+    private final String connectionURL = "jdbc:mysql://localhost:3306/MyDB?useUnicode=true&characterSetResults=UTF-8&" +
+            "characterEncoding=UTF-8&useTimezone=true&serverTimezone=Europe/Moscow";
     private final String botName = "@YourCalendarBot";
 
     private enum Command {
+        CALENDAR,
         ADD,
         DELETE,
+        RANDOM,
         NONE
     }
 
@@ -39,7 +50,6 @@ public class Bot extends TelegramLongPollingBot {
             return date.toString() + " " + text;
         }
     }
-
 
     public static void main(String[] args) {
         ApiContextInitializer.init();
@@ -65,93 +75,87 @@ public class Bot extends TelegramLongPollingBot {
 
     public void onUpdateReceived(Update update) {
         Message message = update.getMessage();
-
-        if (message != null && message.hasText()) {
-            String messageText = message.getText();
-            if (messageText.endsWith(botName)) {
-                messageText = messageText.substring(0, messageText.length() - botName.length());
-            }
-            switch (messageText) {
-                case "/start":
-                    sendMsg(message, "I'm the Calendar Bot! I can do stuff!\n" +
-                            "Try one of my commands: \n/help\n/add\n/show\n/delete");
-                    currentCommand = Command.NONE;
-                    break;
-                case "/add":
-                    currentCommand = Command.ADD;
-                    sendMsg(message, "Send me the date and the event like this: DD.MM.YYYY your event");
-                    break;
-                case "/help":
-                    sendMsg(message, "I'm ready to help!");
-                    currentCommand = Command.NONE;
-                    break;
-                case "/show":
-                    try {
+        try {
+            if (message != null && message.hasText()) {
+                String messageText = message.getText();
+                if (messageText.endsWith(botName)) {
+                    messageText = messageText.substring(0, messageText.length() - botName.length());
+                }
+                switch (messageText) {
+                    case "/start":
+                        sendMsg(message, "I'm the Calendar Bot! I can do stuff!\n" +
+                                "Try one of my commands:" +
+                                "\n/calendar - show calendar for month" +
+                                "\n/add - add new event" +
+                                "\n/show - show all your events" +
+                                "\n/delete - delete event" +
+                                "\n/random - generate a random date just for fun" +
+                                "\n/stop - stop command");
+                        currentCommand = Command.NONE;
+                        break;
+                    case "/calendar":
+                        currentCommand = Command.CALENDAR;
+                        sendMsg(message, "Send me month like this: MM.YYYY");
+                        break;
+                    case "/add":
+                        currentCommand = Command.ADD;
+                        sendMsg(message, "Send me the date and the event like this: DD.MM.YYYY your event\n" +
+                                "Your message cannot be longer than 256 characters");
+                        break;
+                    case "/show":
                         show(message, false);
-                    } catch (BotException e) {
-                        //ignoring
-                    }
-                    currentCommand = Command.NONE;
-                    break;
-                case "/delete":
-                    currentCommand = Command.DELETE;
-                    try {
+                        currentCommand = Command.NONE;
+                        break;
+                    case "/delete":
+                        currentCommand = Command.DELETE;
                         show(message, true);
                         sendMsg(message, "Please send me the number of the event you want to delete");
-                    } catch (Exception e) {
-                        //ignoring
-                    }
-                    break;
-                case "/stop":
-                    currentCommand = Command.NONE;
-                    sendMsg(message, "Ready for the new command!");
-                    break;
-                default:
-                    if (currentCommand.equals(Command.NONE)) {
-                        sendMsg(message, "I don't know what you mean :(\n" +
-                                "Try one of these: \n/help\n/add\n/show\n/delete");
-                    } else {
+                        break;
+                    case "/random":
+                        currentCommand = Command.RANDOM;
+                        sendMsg(message, "Send me dates like this: DD.MM.YYYY DD.MM.YYYY\n" +
+                                "The first date should be earlier than the second date");
+                        break;
+                    case "/stop":
+                        currentCommand = Command.NONE;
+                        sendMsg(message, "Ready for the new command!");
+                        break;
+                    default:
                         switch (currentCommand) {
+                            case NONE:
+                                sendMsg(message, "I don't know what you mean :(\n" +
+                                        "Try one of these: " +
+                                        "\n/start" +
+                                        "\n/help" +
+                                        "\n/calendar" +
+                                        "\n/add" +
+                                        "\n/show" +
+                                        "\n/delete" +
+                                        "\n/random" +
+                                        "\n/stop");
+                                break;
+                            case CALENDAR:
+                                calendar(message);
+                                break;
                             case ADD:
-                                if (add(message.getChatId(), messageText)) {
-                                    sendMsg(message, "Added successfully!");
-                                    currentCommand = Command.NONE;
-                                } else {
-                                    sendMsg(message, "Invalid date format.\nFormat should be: DD.MM.YYYY\nTry again");
-                                }
+                                add(message);
                                 break;
                             case DELETE:
-                                if (delete(messageText)) {
-                                    sendMsg(message, "deleted successfully!");
-                                    currentCommand = Command.NONE;
-                                } else {
-                                    sendMsg(message, "Something wrong\nTry again");
-
-                                }
+                                delete(message);
+                                break;
+                            case RANDOM:
+                                random(message);
                                 break;
                             default:
                                 break;
                         }
-                    }
-                    break;
+                        currentCommand = Command.NONE;
+                        break;
+                }
             }
+        } catch (BotException e) {
+            sendMsg(message, e.getMessage());
         }
-    }
-
-    private Event check(String text) throws Exception {
-        String[] tokens = text.trim().split(" ");
-        if (tokens.length == 0) throw new BotException("error");
-        String date = tokens[0];
-        date = date.trim();
-        boolean dateGood = date.matches("[0-9][0-9].[0-9][0-9].[0-9][0-9][0-9][0-9]");
-        if (!dateGood) throw new BotException("error");
-        String day = date.substring(0, 2);
-        String month = date.substring(3, 5);
-        String year = date.substring(6, 10);
-        if (Integer.parseInt(day) > 31 || Integer.parseInt(month) > 12 || Integer.parseInt(year) > 2100)
-            throw new BotException("error");
-        if (tokens.length < 2 || tokens[1].length() == 0) throw new BotException("event of length 0");
-        return new Event(Date.valueOf(year + "-" + month + "-" + day), text.substring(11), -1);
     }
 
     private String getQuery(boolean deleteFlag) {
@@ -159,98 +163,152 @@ public class Bot extends TelegramLongPollingBot {
         return "SELECT * FROM Events WHERE chatId=? ORDER BY date";
     }
 
-    private boolean add(Long chatId, String text) {
+    private java.util.Date correctDateFormat(String date) throws BotException {
+        SimpleDateFormat format = new SimpleDateFormat("dd.MM.yyyy");
+        format.setLenient(false);
         try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            Event event = check(text);
-            try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
-                 PreparedStatement statement = connection.prepareStatement("INSERT INTO `Events` (`chatId`, `text`, `date`) VALUES (?,?,?)")) {
-                statement.setLong(1, chatId);
-                statement.setString(2, event.text);
-                statement.setDate(3, event.date);
-                if (statement.executeUpdate() != 1) {
-                    return false;
-                }
-
-            } catch (SQLException e) {
-                return false;
-
-            }
-
-        } catch (Exception e) {
-            return false;
+            return format.parse(date);
+        } catch (ParseException e) {
+            throw new BotException("Invalid date format.\nFormat should be: DD.MM.YYYY\nTry again");
         }
-        return true;
     }
 
+    private void calendar(Message message) throws BotException {
+        correctDateFormat("01." + message.getText());
+        String[] selectedMonth = message.getText().split("\\.");
+        LocalDate date = LocalDate.of(Integer.parseInt(selectedMonth[1]), Integer.parseInt(selectedMonth[0]), 1);
+        date = date.minusDays(date.getDayOfMonth() - 1);
+        Month month = date.getMonth();
+        int firstWeekDay = date.getDayOfWeek().getValue() - 1;
+        StringBuilder calendar = new StringBuilder();
+        calendar.append(month.toString()).append(" ").append(date.getYear()).append("\n");
+        for (DayOfWeek weekday : DayOfWeek.values()) {
+            calendar.append(weekday.name(), 0, 2).append(" ");
+        }
+        calendar.append("\n");
+        for (int day = 0; day < firstWeekDay; ++day) {
+            if (day % 2 == 0) {
+                calendar.append(" ");
+            }
+            calendar.append("      ");
+        }
+        for (int day = 1; day <= month.length(date.isLeapYear()); ++day) {
+            calendar.append(String.format("%02d", day)).append("  ");
+            if ((day + firstWeekDay) % 7 == 0) {
+                calendar.append("\n");
+            }
+        }
+        sendMsg(message, String.valueOf(calendar));
+    }
+
+    private void add(Message message) throws BotException {
+        if (message.getText().length() > 256) {
+            throw new BotException("Your message cannot be longer than 256 characters\nTry again");
+        }
+        String[] tokens = message.getText().trim().split(" ");
+        if (tokens.length < 2) {
+            throw new BotException("Invalid event format.\nFormat should be: DD.MM.YYYY your event\nTry again");
+        }
+        Event event = new Event((Date) correctDateFormat(tokens[0]), message.getText().substring(11), -1);
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            throw new BotException("Unable to enter event now.\nPlease try again later");
+        }
+        try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
+             PreparedStatement statement = connection.prepareStatement
+                     ("INSERT INTO `Events` (`chatId`, `text`, `date`) VALUES (?,?,?)")) {
+            statement.setLong(1, message.getChatId());
+            statement.setString(2, event.text);
+            statement.setDate(3, event.date);
+            if (statement.executeUpdate() != 1) {
+                throw new BotException("Unable to enter event now.\nPlease try again later");
+            }
+            sendMsg(message, "Added successfully!");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new BotException("Unable to enter event now.\nPlease try again later");
+        }
+    }
 
     private void show(Message message, boolean deleteFlag) throws BotException {
-        //  it will show all the events
+        StringBuilder stringBuilder = new StringBuilder();
         try {
-            StringBuilder stringBuilder = new StringBuilder();
             Class.forName("com.mysql.cj.jdbc.Driver");
-            try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
-                 PreparedStatement statement = connection.prepareStatement(getQuery(deleteFlag))) {
-                statement.setLong(1, message.getChatId());
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            throw new BotException("Unable to" + (deleteFlag ? "delete" : "show") + "event now.\nPlease try again later");
+        }
+        try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
+             PreparedStatement statement = connection.prepareStatement(getQuery(deleteFlag))) {
+            statement.setLong(1, message.getChatId());
 
-                try (ResultSet resultSet = statement.executeQuery()) {
-                    Event event;
-                    while ((event = toEvent(statement.getMetaData(), resultSet)) != null) {
-                        if (deleteFlag) {
-                            stringBuilder.append("Event number ").append(event.id).append(": ");
-                        }
-                        stringBuilder.append(event.toString()).append("\n");
+            try (ResultSet resultSet = statement.executeQuery()) {
+                Event event;
+                while ((event = toEvent(statement.getMetaData(), resultSet)) != null) {
+                    if (deleteFlag) {
+                        stringBuilder.append("Event number ").append(event.id).append(": ");
                     }
-                } catch (Exception e) {
-                    sendMsg(message, "Something wrong. Try again");
+                    stringBuilder.append(event.toString()).append("\n");
                 }
-
-                if (stringBuilder.toString().equals("")) {
-                    sendMsg(message, "No events, you're all free!");
-                    if (deleteFlag) throw new BotException("nothing to delete");
-                } else {
-                    sendMsg(message, stringBuilder.toString());
-                }
-
-
             } catch (SQLException e) {
-                if (!deleteFlag)
-                    sendMsg(message, "Something wrong. Try again");
-                else throw new BotException("error");
-
+                e.printStackTrace();
+                throw new BotException("Unable to" + (deleteFlag ? "delete" : "show") + "event now.\nPlease try again later");
             }
 
-        } catch (Exception e) {
-            if (!deleteFlag)
-                sendMsg(message, "Something wrong. Try again");
-            else throw new BotException("error");
+            if (stringBuilder.toString().equals("")) {
+                if (deleteFlag) {
+                    sendMsg(message, "Nothing to delete");
+                } else {
+                    sendMsg(message, "No events, you're all free!");
+                }
+            } else {
+                sendMsg(message, stringBuilder.toString());
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new BotException("Unable to" + (deleteFlag ? "delete" : "show") + "event now.\nPlease try again later");
         }
-
-
     }
 
-
-    private boolean delete(String s) {
-
+    private void delete(Message message) throws BotException {
+        if (!isNumber(message.getText())) {
+            throw new BotException("Invalid number format.\nTry again");
+        }
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            long id = Long.parseLong(s);
-            try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
-                 PreparedStatement statement = connection.prepareStatement("DELETE FROM `Events` WHERE `id` = ?")) {
-                statement.setLong(1, id);
-                if (statement.executeUpdate() != 1) {
-                    return false;
-                }
-
-            } catch (SQLException e) {
-                return false;
-
-            }
-
-        } catch (Exception e) {
-            return false;
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            throw new BotException("Unable to delete event now.\nPlease try again later");
         }
-        return true;
+        long id = Long.parseLong(message.getText());
+        try (Connection connection = DriverManager.getConnection(connectionURL, userName, passWord);
+             PreparedStatement statement = connection.prepareStatement("DELETE FROM `Events` WHERE `id` = ?")) {
+            statement.setLong(1, id);
+            if (statement.executeUpdate() != 1) {
+                throw new BotException("Unable to delete event now.\nPlease try again later");
+            }
+            sendMsg(message, "Deleted successfully!");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new BotException("Unable to delete event now.\nPlease try again later");
+        }
+    }
+
+    private void random(Message message) throws BotException {
+        String[] dates = message.getText().split(" ");
+        if (dates.length != 2) {
+            throw new BotException("Invalid dates format.\nFormat should be: DD.MM.YYYY DD.MM.YYYY\nTry again");
+        }
+        java.util.Date firstDate = correctDateFormat(dates[0]);
+        java.util.Date secondDate = correctDateFormat(dates[1]);
+        if (!firstDate.before(secondDate)) {
+            throw new BotException("The first date should be earlier than the second date\nTry again");
+        }
+        sendMsg(message, (new SimpleDateFormat("dd.MM.yyyy")).format
+                (new Date(ThreadLocalRandom.current().nextLong(firstDate.getTime(), secondDate.getTime()))));
     }
 
     private Event toEvent(ResultSetMetaData metaData, ResultSet resultSet) throws SQLException {
