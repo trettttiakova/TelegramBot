@@ -337,7 +337,6 @@ public class Bot extends TelegramLongPollingBot {
         correctDateFormat("01." + message.getText());
         String[] selectedMonth = message.getText().split("\\.");
         LocalDate date = LocalDate.of(Integer.parseInt(selectedMonth[1]), Integer.parseInt(selectedMonth[0]), 1);
-        date = date.minusDays(date.getDayOfMonth() - 1);
         Month month = date.getMonth();
         int firstWeekDay = date.getDayOfWeek().getValue() - 1;
         StringBuilder calendar = new StringBuilder();
