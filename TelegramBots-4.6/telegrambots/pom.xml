@@ -72,7 +72,7 @@
 
         <glassfish.version>2.29.1</glassfish.version>
         <jerseybundle.version>1.19.3</jerseybundle.version>
-        <httpcompontents.version>4.5.10</httpcompontents.version>
+        <httpcompontents.version>4.5.13</httpcompontents.version>
         <json.version>20180813</json.version>
         <jackson.version>2.10.1</jackson.version>
         <jacksonanotation.version>2.10.1</jacksonanotation.version>
